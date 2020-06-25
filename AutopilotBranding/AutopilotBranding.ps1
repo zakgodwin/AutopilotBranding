@@ -1,17 +1,14 @@
 # If we are running as a 32-bit process on an x64 system, re-launch as a 64-bit process
-if ("$env:PROCESSOR_ARCHITEW6432" -ne "ARM64")
-{
-    if (Test-Path "$($env:WINDIR)\SysNative\WindowsPowerShell\v1.0\powershell.exe")
-    {
-        & "$($env:WINDIR)\SysNative\WindowsPowerShell\v1.0\powershell.exe" -ExecutionPolicy bypass -NoProfile -File "$PSCommandPath"
-        Exit $lastexitcode
-    }
+if ("$env:PROCESSOR_ARCHITEW6432" -ne "ARM64") {
+	if (Test-Path "$($env:WINDIR)\SysNative\WindowsPowerShell\v1.0\powershell.exe") {
+		& "$($env:WINDIR)\SysNative\WindowsPowerShell\v1.0\powershell.exe" -ExecutionPolicy bypass -NoProfile -File "$PSCommandPath"
+		Exit $lastexitcode
+	}
 }
 
 # Create a tag file just so Intune knows this was installed
-if (-not (Test-Path "$($env:ProgramData)\Microsoft\AutopilotBranding"))
-{
-    Mkdir "$($env:ProgramData)\Microsoft\AutopilotBranding"
+if (-not (Test-Path "$($env:ProgramData)\Microsoft\AutopilotBranding")) {
+	Mkdir "$($env:ProgramData)\Microsoft\AutopilotBranding"
 }
 Set-Content -Path "$($env:ProgramData)\Microsoft\AutopilotBranding\AutopilotBranding.ps1.tag" -Value "Installed"
 
@@ -28,7 +25,10 @@ Write-Host "Loading configuration: $($installFolder)Config.xml"
 Write-Host "Importing layout: $($installFolder)Layout.xml"
 Copy-Item "$($installFolder)Layout.xml" "C:\Users\Default\AppData\Local\Microsoft\Windows\Shell\LayoutModification.xml" -Force
 
+
 # STEP 2: Configure background
+if ($config.Config.Background)
+{
 Write-Host "Setting up Autopilot theme"
 Mkdir "C:\Windows\Resources\OEM Themes" -Force | Out-Null
 Copy-Item "$installFolder\Autopilot.theme" "C:\Windows\Resources\OEM Themes\Autopilot.theme" -Force
@@ -38,6 +38,8 @@ Write-Host "Setting Autopilot theme as the new user default"
 reg.exe load HKLM\TempUser "C:\Users\Default\NTUSER.DAT" | Out-Host
 reg.exe add "HKLM\TempUser\SOFTWARE\Microsoft\Windows\CurrentVersion\Themes" /v InstallTheme /t REG_EXPAND_SZ /d "%SystemRoot%\resources\OEM Themes\Autopilot.theme" /f | Out-Host
 reg.exe unload HKLM\TempUser | Out-Host
+}
+
 
 # STEP 3: Set time zone (if specified)
 if ($config.Config.TimeZone) {
@@ -86,8 +88,7 @@ if ($config.Config.Language) {
 
 # STEP 9: Add features on demand
 $currentWU = (Get-ItemProperty -Path "HKLM:\Software\Policies\Microsoft\Windows\WindowsUpdate\AU" -ErrorAction Ignore).UseWuServer
-if ($currentWU -eq 1)
-{
+if ($currentWU -eq 1) {
 	Write-Host "Turning off WSUS"
 	Set-ItemProperty -Path "HKLM:\Software\Policies\Microsoft\Windows\WindowsUpdate\AU"  -Name "UseWuServer" -Value 0
 	Restart-Service wuauserv
@@ -96,8 +97,7 @@ $config.Config.AddFeatures.Feature | % {
 	Write-Host "Adding Windows feature: $_"
 	Add-WindowsCapability -Online -Name $_
 }
-if ($currentWU -eq 1)
-{
+if ($currentWU -eq 1) {
 	Write-Host "Turning on WSUS"
 	Set-ItemProperty -Path "HKLM:\Software\Policies\Microsoft\Windows\WindowsUpdate\AU"  -Name "UseWuServer" -Value 1
 	Restart-Service wuauserv
@@ -123,8 +123,11 @@ if ($config.Config.OEMInfo)
 	reg.exe add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\OEMInformation" /v SupportPhone /t REG_SZ /d "$($config.Config.OEMInfo.SupportPhone)" /f /reg:64 | Out-Host
 	reg.exe add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\OEMInformation" /v SupportHours /t REG_SZ /d "$($config.Config.OEMInfo.SupportHours)" /f /reg:64 | Out-Host
 	reg.exe add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\OEMInformation" /v SupportURL /t REG_SZ /d "$($config.Config.OEMInfo.SupportURL)" /f /reg:64 | Out-Host
+	if ($config.Config.OEMInfo.Logo)
+	{
 	Copy-Item "$installFolder\$($config.Config.OEMInfo.Logo)" "C:\Windows\$($config.Config.OEMInfo.Logo)" -Force
 	reg.exe add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\OEMInformation" /v Logo /t REG_SZ /d "C:\Windows\$($config.Config.OEMInfo.Logo)" /f /reg:64 | Out-Host
+	}
 }
 
 # STEP 13: Enable UE-V
@@ -144,4 +147,22 @@ reg.exe add "HKLM\SYSTEM\CurrentControlSet\Control\Network\NewNetworkWindowOff" 
 Write-Host "Turning off Edge desktop icon"
 reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\EdgeUpdate" /v "CreateDesktopShortcutDefault" /t REG_DWORD /d 0 /f /reg:64 | Out-Host
 
+# STEP 16: Disable Pinning Store To Taskbar
+Write-Output "Turning off Store pin on taskbar"
+reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\Windows\Explorer" /v "NoPinningStoreToTaskbar"  /t REG_DWORD /d 0 /f /reg:64 | Out-Host
+
+# STEP 17: Disable PDF Handler Switching
+Write-Output "Turning off PDF Handler Switching"
+reg.exe add "HKLM\SOFTWARE\Policies\Adobe\Acrobat Reader\DC\FeatureLockdown" /v "DisablePDFHandlerSwitching"  /t REG_DWORD /d 1 /f /reg:64 | Out-Host
+
+# STEP 18: Run Scripts
+Write-Output "Running configuration scripts"
+
+#Stopping the transcript command before external script calls to fix error
 Stop-Transcript
+
+$config.Config.Scripts.Script | ForEach-Object {
+	Write-Output "Starting $_"
+	& "$PSScriptRoot\$_"
+}
+

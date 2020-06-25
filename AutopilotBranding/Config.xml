@@ -1,5 +1,7 @@
 <Config>
-  <TimeZone>Eastern Standard Time</TimeZone>
+<!-- If you want to set a background and theme, customize PoSh script and set this to: <Background>YES</Background> -->
+<Background></Background>
+  <TimeZone>Central Standard Time</TimeZone>
   <RemoveApps>
     <App>Microsoft.BingWeather</App>
     <App>Microsoft.DesktopAppInstaller</App>
@@ -35,11 +37,17 @@
   <Language></Language>
   <!-- If you want to set a language, customize and reference this file: <Language>Language.xml</Language> -->
   <DefaultApps>Associations.xml</DefaultApps>
+  <!-- Add additional scripts to run by placing in root folder and adding example: <Script>new-script.ps1</Script> -->
+  <Scripts>
+    <Script>DriveMapping.ps1</Script>
+    <!--<Script>SomeScript.ps1</Script>-->
+  </Scripts>
   <RegisteredOwner>Autopilot User</RegisteredOwner>
   <RegisteredOrganization>Contoso</RegisteredOrganization>
   <OEMInfo>
     <Manufacturer>Contoso</Manufacturer>
-    <Logo>Contoso.bmp</Logo>
+    <!--<Logo>LogoFile.bmp</Logo>-->
+    <Logo></Logo>
     <SupportPhone>+1 800-555-1212</SupportPhone>
     <SupportHours>8am-5pm PST</SupportHours>
     <SupportURL>http://www.contoso.com</SupportURL>
